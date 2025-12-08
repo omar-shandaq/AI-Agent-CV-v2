@@ -19,8 +19,15 @@ import {
 // ---------------------------------------------------------------------------
 // Proxy + Gemini call
 // ---------------------------------------------------------------------------
+const DEFAULT_PROXY_URL =
+  "https://backend-vercel-repo-git-main-jouds-projects-8f56041e.vercel.app/api/gemini-proxy";
+
 function getProxyUrl() {
-  return window.GEMINI_PROXY_URL || window.GEMINI_PROXY_URL_OVERRIDE || "";
+  return (
+    window.GEMINI_PROXY_URL ||
+    window.GEMINI_PROXY_URL_OVERRIDE ||
+    DEFAULT_PROXY_URL
+  );
 }
 
 export async function callGeminiProxy(payload) {
