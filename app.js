@@ -1472,3 +1472,4 @@ document.getElementById("submitCvReview").addEventListener("click", () => {
     }
   });
 });
+
