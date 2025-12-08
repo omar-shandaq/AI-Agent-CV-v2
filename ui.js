@@ -186,10 +186,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Clear chat history in UI but keep stored messages if desired
   clearChatHistoryDom();
-
-  // Load stored chat (optional)
-  chatHistory = loadChatHistory();
-  chatHistory.forEach((msg) => addMessage(msg.text, msg.isUser));
+  // Clear stored chat so each page load starts fresh
+  saveChatHistory([]);
 
   // Chat handler
   async function handleSendMessage() {
