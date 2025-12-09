@@ -66,6 +66,27 @@ function clearChatHistoryDom() {
 // ---------------------------------------------------------------------------
 // Modal helpers (CV review)
 // ---------------------------------------------------------------------------
+function formatDescriptionAsBullets(text) {
+  if (!text) return "";
+
+  // Normalize line breaks and insert breaks after periods to isolate sentences
+  const withBreaks = text.replace(/\r/g, "").replace(/\.\s+/g, ".\n");
+
+  const sentences = [];
+  withBreaks.split(/\n+/).forEach((part) => {
+    const cleaned = part.replace(/^[\s•\-]+/, "").trim();
+    if (!cleaned) return;
+    cleaned
+      .split(".")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((s) => sentences.push(s));
+  });
+
+  if (sentences.length === 0) return text.trim();
+  return sentences.map((s) => `• ${s}`).join("\n");
+}
+
 function createItemRow(item, fields) {
   const row = document.createElement("div");
   row.className = "item-row";
@@ -79,18 +100,20 @@ function createItemRow(item, fields) {
   fields.forEach((f) => {
     const field = typeof f === "string" ? { name: f } : f;
     const isTextarea = field.type === "textarea" || field.multiline;
+    const isDescriptionField = field.name === "description";
     const input = document.createElement(isTextarea ? "textarea" : "input");
     if (!isTextarea) input.type = "text";
+    let autoResizeFn = null;
     if (isTextarea) {
       input.rows = field.rows || 1;
       input.wrap = "soft";
       input.style.resize = "none";
-      const autoResize = (el) => {
+      autoResizeFn = (el) => {
         el.style.height = "auto";
         el.style.height = `${el.scrollHeight}px`;
       };
-      autoResize(input);
-      input.addEventListener("input", () => autoResize(input));
+      autoResizeFn(input);
+      input.addEventListener("input", () => autoResizeFn(input));
     }
     const placeholderText =
       field.placeholder ||
@@ -99,9 +122,40 @@ function createItemRow(item, fields) {
         : "");
     input.placeholder = placeholderText;
     input.value = item[field.name] || "";
+    if (isDescriptionField) {
+      const applyFormattedBullets = () => {
+        input.value = formatDescriptionAsBullets(input.value);
+        if (autoResizeFn) autoResizeFn(input);
+      };
+
+      applyFormattedBullets();
+
+      input.addEventListener("blur", () => {
+        applyFormattedBullets();
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const { selectionStart, selectionEnd, value } = input;
+          const insertText = "\n• ";
+          const newValue =
+            value.slice(0, selectionStart) +
+            insertText +
+            value.slice(selectionEnd);
+          input.value = newValue;
+          const newPos = selectionStart + insertText.length;
+          input.setSelectionRange(newPos, newPos);
+          if (autoResizeFn) autoResizeFn(input);
+        }
+      });
+    }
     input.dataset.field = field.name || "";
     if (field.className) input.classList.add(field.className);
     if (field.isBold) input.style.fontWeight = "700";
+    if (autoResizeFn) {
+      requestAnimationFrame(() => autoResizeFn(input));
+    }
     row.appendChild(input);
   });
 
@@ -191,7 +245,6 @@ function renderCvDetails(cv) {
           isBold: true,
         },
         { name: "school", placeholder: "School" },
-        { name: "period", placeholder: "Years" },
       ],
     },
     {
@@ -505,7 +558,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }`.trim()
                   : edu.major || "",
               school: edu.school || edu.institution || "",
-              period: edu.period || edu.years || "",
             })),
             certifications: (s.certifications || []).map((cert) => ({
               title: `${cert.title || ""}${
