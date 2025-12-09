@@ -7,7 +7,8 @@ import {
   USER_RULES_KEY,
   LAST_RECOMMENDATIONS_KEY,
   DEFAULT_RULES,
-  FINAL_CERTIFICATE_CATALOG,
+  initializeCertificates,
+  getFinalCertificateCatalog,
 } from "./constants.js";
 
 // Certificate catalog (loaded on init)
@@ -84,22 +85,19 @@ export function loadLastRecommendations() {
   }
 }
 
-// Load certificate catalog from storage or defaults
-export function loadCertificateCatalog() {
-  const stored = localStorage.getItem(CERT_CATALOG_KEY);
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        certificateCatalog = parsed;
-        return certificateCatalog;
-      }
-    } catch (err) {
-      console.warn("Failed to parse stored certificate catalog, using default.", err);
-    }
+// Load certificate catalog (async - loads from JSON file)
+export async function loadCertificateCatalog() {
+  // Initialize certificates if not already loaded
+  await initializeCertificates();
+  
+  // Get the loaded certificates
+  certificateCatalog = getFinalCertificateCatalog();
+  
+  // Persist to localStorage for faster future loads
+  if (certificateCatalog && certificateCatalog.length > 0) {
+    saveCertificateCatalog(certificateCatalog);
   }
-  saveCertificateCatalog(FINAL_CERTIFICATE_CATALOG);
-  certificateCatalog = FINAL_CERTIFICATE_CATALOG;
+  
   return certificateCatalog;
 }
 
@@ -117,16 +115,72 @@ export function getCatalogAsPromptString() {
   const catalog =
     certificateCatalog && certificateCatalog.length > 0
       ? certificateCatalog
-      : FINAL_CERTIFICATE_CATALOG;
+      : getFinalCertificateCatalog();
 
   return catalog
     .map(
       (c) =>
-        `- **${c.name}** (${c.level || "N/A"}): ${c.description}${
-          c.officialLink ? ` | Link: ${c.officialLink}` : ""
-        }`
+        `- **${c.name || c.Certificate_Name_EN || "Unknown Certificate"}** (${
+          c.level || c.Level || "N/A"
+        }): ${c.description || c.Description || ""}${
+          c.fieldEn || c.Certificate_Field_EN
+            ? ` | Field: ${c.fieldEn || c.Certificate_Field_EN}`
+            : ""
+        }${
+          c.entity || c.Certificate_Entity
+            ? ` | Entity: ${c.entity || c.Certificate_Entity}`
+            : ""
+        }${c.officialLink ? ` | Link: ${c.officialLink}` : ""}`
     )
     .join("\n");
+}
+
+// Basic in-memory search (case-insensitive) across common fields
+export function searchCertificates(query) {
+  if (!query) return certificateCatalog;
+  const q = query.toLowerCase();
+  return certificateCatalog.filter((c) => {
+    const haystack = [
+      c.name,
+      c.nameAr,
+      c.entity,
+      c.fieldEn,
+      c.fieldAr,
+      c.description,
+      c.level,
+      c.Certificate_Name_EN,
+      c.Certificate_Name_AR,
+      c.Certificate_Entity,
+      c.Certificate_Field_EN,
+      c.Certificate_Field_AR,
+      c.Description,
+      c.Level,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(q);
+  });
+}
+
+// Index by field for quick lookups
+let fieldIndex = null;
+export function buildFieldIndex() {
+  if (fieldIndex) return fieldIndex;
+  fieldIndex = new Map();
+  certificateCatalog.forEach((c) => {
+    const field = (c.fieldEn || c.Certificate_Field_EN || "").toLowerCase();
+    if (!field) return;
+    if (!fieldIndex.has(field)) fieldIndex.set(field, []);
+    fieldIndex.get(field).push(c);
+  });
+  return fieldIndex;
+}
+
+export function searchByField(fieldName) {
+  if (!fieldName) return [];
+  const idx = buildFieldIndex();
+  return idx.get(fieldName.toLowerCase()) || [];
 }
 
 // Recommendation summary for chat grounding

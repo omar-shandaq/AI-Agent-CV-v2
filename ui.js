@@ -77,14 +77,77 @@ function createItemRow(item, fields) {
   row.appendChild(deleteBtn);
 
   fields.forEach((f) => {
-    const input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = f.charAt(0).toUpperCase() + f.slice(1);
-    input.value = item[f] || "";
+    const field = typeof f === "string" ? { name: f } : f;
+    const isTextarea = field.type === "textarea" || field.multiline;
+    const input = document.createElement(isTextarea ? "textarea" : "input");
+    if (!isTextarea) input.type = "text";
+    if (isTextarea) {
+      input.rows = field.rows || 1;
+      input.wrap = "soft";
+      input.style.resize = "none";
+      const autoResize = (el) => {
+        el.style.height = "auto";
+        el.style.height = `${el.scrollHeight}px`;
+      };
+      autoResize(input);
+      input.addEventListener("input", () => autoResize(input));
+    }
+    const placeholderText =
+      field.placeholder ||
+      (field.name
+        ? field.name.charAt(0).toUpperCase() + field.name.slice(1)
+        : "");
+    input.placeholder = placeholderText;
+    input.value = item[field.name] || "";
+    input.dataset.field = field.name || "";
+    if (field.className) input.classList.add(field.className);
+    if (field.isBold) input.style.fontWeight = "700";
     row.appendChild(input);
   });
 
   return row;
+}
+
+function createSkillBubble(item, fields) {
+  const bubble = document.createElement("div");
+  bubble.className = "skill-bubble";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "skill-input";
+  const primaryField =
+    typeof fields[0] === "string" ? fields[0] : fields[0].name;
+  input.placeholder =
+    typeof fields[0] === "object" && fields[0].placeholder
+      ? fields[0].placeholder
+      : primaryField.charAt(0).toUpperCase() + primaryField.slice(1);
+  const skillValue = item[primaryField] || item.title || "";
+  input.value = skillValue;
+  input.dataset.field = primaryField;
+  const minWidth = 10;
+  input.style.minWidth = `${minWidth}ch`;
+  input.style.maxWidth = "20ch";
+  const textLength = skillValue.length;
+  const calculatedWidth = Math.max(minWidth, textLength + 1);
+  input.style.width = `${calculatedWidth}ch`;
+  input.addEventListener("input", (e) => {
+    const newLength = e.target.value.length;
+    const newWidth = Math.max(minWidth, newLength + 1);
+    input.style.width = `${newWidth}ch`;
+  });
+  bubble.appendChild(input);
+  const deleteBtn = document.createElement("span");
+  deleteBtn.className = "delete-item-btn";
+  deleteBtn.textContent = "×";
+  deleteBtn.title = "Delete skill";
+  deleteBtn.setAttribute("role", "button");
+  deleteBtn.setAttribute("aria-label", "Delete skill");
+  deleteBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    bubble.remove();
+  });
+  bubble.appendChild(deleteBtn);
+  return bubble;
 }
 
 function renderCvDetails(cv) {
@@ -93,33 +156,93 @@ function renderCvDetails(cv) {
   container.innerHTML = "";
 
   const sections = [
-    { key: "experience", label: "Experience", fields: ["title", "description", "years"] },
-    { key: "education", label: "Education", fields: ["title", "description"] },
-    { key: "certifications", label: "Certifications", fields: ["title"] },
-    { key: "skills", label: "Skills", fields: ["title"] },
+    {
+      key: "experience",
+      label: "Experience",
+      fields: [
+        {
+          name: "jobTitle",
+          placeholder: "Job Title",
+          className: "cv-field-job-title",
+          isBold: true,
+        },
+        {
+          name: "company",
+          placeholder: "Company Name",
+          className: "cv-field-company",
+        },
+        {
+          name: "description",
+          placeholder: "Description",
+          className: "cv-description-textarea",
+          multiline: true,
+        },
+        { name: "years", placeholder: "Years" },
+      ],
+    },
+    {
+      key: "education",
+      label: "Education",
+      fields: [
+        {
+          name: "degreeField",
+          placeholder: "Degree and Field of study",
+          className: "education-degree-input",
+          isBold: true,
+        },
+        { name: "school", placeholder: "School" },
+        { name: "period", placeholder: "Years" },
+      ],
+    },
+    {
+      key: "certifications",
+      label: "Certifications",
+      fields: [{ name: "title", placeholder: "Certification" }],
+    },
+    {
+      key: "skills",
+      label: "Skills",
+      fields: [{ name: "title", placeholder: "Skill" }],
+    },
   ];
 
   sections.forEach((sec) => {
     const secDiv = document.createElement("div");
     secDiv.className = "cv-section";
+    secDiv.classList.add(`cv-section-${sec.key}`);
     secDiv.innerHTML = `<h3>${sec.label}</h3>`;
 
-    const listDiv = document.createElement("div");
-    listDiv.id = `${cv.name}_${sec.key}_list`;
-
-    (cv[sec.key] || []).forEach((item) => {
-      listDiv.appendChild(createItemRow(item, sec.fields));
-    });
+    let listDiv;
+    if (sec.key === "skills") {
+      listDiv = document.createElement("div");
+      listDiv.className = "skills-bubble-list";
+      listDiv.id = `${cv.name}_${sec.key}_list`;
+      (cv[sec.key] || []).forEach((item) => {
+        listDiv.appendChild(createSkillBubble(item, sec.fields));
+      });
+    } else {
+      listDiv = document.createElement("div");
+      listDiv.id = `${cv.name}_${sec.key}_list`;
+      (cv[sec.key] || []).forEach((item) => {
+        listDiv.appendChild(createItemRow(item, sec.fields));
+      });
+    }
 
     const addBtn = document.createElement("button");
     addBtn.className = "add-btn";
     addBtn.textContent = `+ Add ${sec.label}`;
     addBtn.addEventListener("click", () => {
       const emptyItem = {};
-      sec.fields.forEach((f) => (emptyItem[f] = ""));
-      listDiv.appendChild(createItemRow(emptyItem, sec.fields));
+      sec.fields.forEach((f) => {
+        const field = typeof f === "string" ? { name: f } : f;
+        if (field.name) emptyItem[field.name] = "";
+      });
+      if (sec.key === "skills") {
+        listDiv.appendChild(createSkillBubble(emptyItem, sec.fields));
+      } else {
+        listDiv.appendChild(createItemRow(emptyItem, sec.fields));
+      }
     });
-
     secDiv.appendChild(listDiv);
     secDiv.appendChild(addBtn);
     container.appendChild(secDiv);
@@ -132,7 +255,8 @@ function openCvModal(allCvResults) {
   const content = document.getElementById("cvResultsContainer");
   if (!modal || !tabs || !content) return;
 
-  modal.style.display = "block";
+  // Center the modal using flex; matches CSS that expects flex display
+  modal.style.display = "flex";
   tabs.innerHTML = "";
   content.innerHTML = "";
 
@@ -144,7 +268,9 @@ function openCvModal(allCvResults) {
     if (index === 0) tab.classList.add("active");
 
     tab.addEventListener("click", () => {
-      document.querySelectorAll(".cv-tab").forEach((t) => t.classList.remove("active"));
+      document
+        .querySelectorAll(".cv-tab")
+        .forEach((t) => t.classList.remove("active"));
       tab.classList.add("active");
       renderCvDetails(allCvResults[index]);
     });
@@ -158,14 +284,14 @@ function openCvModal(allCvResults) {
 // ---------------------------------------------------------------------------
 // Main bootstrap
 // ---------------------------------------------------------------------------
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   let chatHistory = [];
   let userRules = loadUserRules();
   let uploadedCvs = [];
   let lastRecommendations = loadLastRecommendations();
 
-  // Load catalog
-  loadCertificateCatalog();
+  // Load catalog (async - loads from JSON file)
+  await loadCertificateCatalog();
 
   // DOM
   const userInput = document.getElementById("user-input");
@@ -354,22 +480,32 @@ document.addEventListener("DOMContentLoaded", () => {
           resultsSection
         );
 
-        // Transform for modal
+        // Transform uploadedCvs to the format expected by the modal (rich view)
         const cvResultsForModal = uploadedCvs.map((cv) => {
           const s = cv.structured || {};
           const totalYearsExperience = calculateTotalExperience(s.experience || []);
           return {
             name: cv.name,
             totalYearsExperience,
-            experience: (s.experience || []).map((exp) => ({
-              title: exp.jobTitle || "",
-              description: `${exp.company || ""} - ${exp.description || ""}`,
-              years: exp.period || "",
-              duration: calculateYearsFromPeriod(exp.period || ""),
-            })),
+            experience: (s.experience || []).map((exp) => {
+              const period = exp.period || exp.years || "";
+              return {
+                jobTitle: exp.jobTitle || exp.title || "",
+                company: exp.company || exp.companyName || "",
+                description: exp.description || "",
+                years: period,
+                duration: calculateYearsFromPeriod(period),
+              };
+            }),
             education: (s.education || []).map((edu) => ({
-              title: `${edu.degree || ""} in ${edu.major || ""}`,
-              description: `${edu.institution || ""}${edu.year ? " (" + edu.year + ")" : ""}`,
+              degreeField:
+                (edu.degree || edu.title || "")
+                  ? `${edu.degree || edu.title || ""}${
+                      edu.major ? " in " + edu.major : ""
+                    }`.trim()
+                  : edu.major || "",
+              school: edu.school || edu.institution || "",
+              period: edu.period || edu.years || "",
             })),
             certifications: (s.certifications || []).map((cert) => ({
               title: `${cert.title || ""}${
@@ -474,13 +610,23 @@ document.addEventListener("DOMContentLoaded", () => {
           const list = document.getElementById(`${name}_${sec}_list`);
           if (!list) return;
 
-          list.querySelectorAll(".item-row").forEach((row) => {
-            const entry = {};
-            row.querySelectorAll("input").forEach((input) => {
-              entry[input.placeholder.toLowerCase()] = input.value;
+          if (sec === "skills") {
+            list.querySelectorAll(".skill-bubble").forEach((bubble) => {
+              const input = bubble.querySelector("input");
+              if (input) {
+                result.skills.push({ title: input.value });
+              }
             });
-            result[sec].push(entry);
-          });
+          } else {
+            list.querySelectorAll(".item-row").forEach((row) => {
+              const entry = {};
+              row.querySelectorAll("input, textarea").forEach((input) => {
+                const key = input.dataset.field || input.placeholder.toLowerCase();
+                entry[key] = input.value;
+              });
+              result[sec].push(entry);
+            });
+          }
         });
 
         allResults.push(result);

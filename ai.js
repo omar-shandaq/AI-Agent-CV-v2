@@ -322,23 +322,54 @@ For each CV, provide recommendations in a structured JSON format. The JSON must 
   ]
 }
 
-Important:
-- Respond with ONLY the JSON object. Do not include any introductory text, explanations, or markdown formatting like \`\`\`json.
-- The entire response must be a single, valid JSON object that can be parsed.
-- If no recommendations can be made for a candidate, provide an empty array for their "recommendations".
+**CRITICAL INSTRUCTIONS:**
+- You MUST respond with ONLY a valid JSON object. Nothing else.
+- Do NOT include any introductory text, explanations, comments, or markdown formatting.
+- Do NOT wrap the JSON in code blocks like \`\`\`json or \`\`\`.
+- Do NOT add any text before or after the JSON object.
+- Start your response with { and end with }.
+- The entire response must be parseable as JSON without any modifications.
+- If no recommendations can be made for a candidate, provide an empty array [] for their "recommendations" field.
+
+**Example of correct response format:**
+{"candidates":[{"candidateName":"John Doe","recommendations":[]}]}
+
+Begin your response now with the JSON object only:
 `;
 }
 
 export async function analyzeCvsWithAI(cvArray, rulesArray) {
   const analysisPrompt = buildAnalysisPromptForCvs(cvArray, rulesArray || []);
   const rawResponse = await callGeminiAPI(analysisPrompt, [], "");
-  const cleaned = rawResponse.replace(/```json\s*|\s*```/g, "").trim();
+  
+  // Log raw response for debugging
+  console.log("Raw AI Response:", rawResponse);
+  
+  // Try multiple cleaning strategies
+  let cleaned = rawResponse.trim();
+  
+  // Remove markdown code blocks
+  cleaned = cleaned.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  
+  // Try to extract JSON object if there's text before/after
+  // Look for the first { and last } to extract the JSON object
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+  
+  // Remove any leading/trailing non-JSON text
+  cleaned = cleaned.trim();
 
   let recommendations;
   try {
     recommendations = JSON.parse(cleaned);
   } catch (err) {
     console.error("JSON Parsing Error:", err);
+    console.error("Cleaned response that failed to parse:", cleaned);
+    console.error("First 500 chars of cleaned response:", cleaned.substring(0, 500));
     throw new Error(
       "The AI returned an invalid JSON format. Check the console for the raw response."
     );
