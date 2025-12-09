@@ -503,6 +503,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let uploadedCvs = [];
   let lastRecommendations = loadLastRecommendations();
   let submittedCvData = [];
+  let lastProcessedFileNames = []; // Track last processed file names
 
   // Load catalog (async - loads from JSON file)
   await loadCertificateCatalog();
@@ -696,12 +697,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       uploadedCvs = [];
       const files = Array.from(fileInput.files || []);
       if (files.length > 0) {
+        // New files selected - clear last processed names to allow processing
+        const newFileNames = files.map(f => f.name).sort().join(',');
+        if (newFileNames !== lastProcessedFileNames.sort().join(',')) {
+          lastProcessedFileNames = [];
+        }
         updateStatus(
           uploadStatus,
           `Selected ${files.length} file(s): ${files.map((f) => f.name).join(", ")}`
         );
       } else if (uploadStatus) {
         uploadStatus.innerHTML = "";
+        // File input cleared - clear last processed names
+        lastProcessedFileNames = [];
       }
     });
   }
@@ -709,9 +717,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Analyze CVs
   if (analyzeButton) {
     analyzeButton.addEventListener("click", async () => {
-      const files = Array.from(fileInput?.files || []);
-      if (files.length === 0) {
+      // Check if file input has any files selected (check both value and files)
+      if (!fileInput || !fileInput.files || fileInput.files.length === 0 || !fileInput.value) {
         // No new files selected – do not reuse previous uploads
+        uploadedCvs = [];
+        updateStartRecommendingButton(uploadedCvs);
+        // Ensure file input is cleared
+        if (fileInput) fileInput.value = "";
+        updateStatus(uploadStatus, "Please upload a CV file first. No files are currently selected for analysis.", true);
+        return;
+      }
+      
+      const files = Array.from(fileInput.files);
+      const currentFileNames = files.map(f => f.name).sort().join(',');
+      
+      // Check if these are the same files we just processed and submitted
+      if (lastProcessedFileNames.length > 0 && 
+          currentFileNames === lastProcessedFileNames.sort().join(',')) {
+        // Same files as before - user needs to select new files
         uploadedCvs = [];
         updateStartRecommendingButton(uploadedCvs);
         updateStatus(uploadStatus, "Please upload a CV file first. No files are currently selected for analysis.", true);
@@ -785,8 +808,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           };
         });
 
+        // Save processed file names to prevent reprocessing
+        lastProcessedFileNames = files.map(f => f.name);
+        
         openCvModal(cvResultsForModal, 0);
         updateStatus(uploadStatus, `Parsed ${files.length} CV(s). Review and submit.`);
+        
+        // Don't clear file input here - keep it until submission
+        // It will be cleared in the submit handler
       } catch (err) {
         console.error("Analysis Error:", err);
         updateStatus(
@@ -794,6 +823,10 @@ document.addEventListener("DOMContentLoaded", async () => {
           `Failed to analyze CVs. Error: ${err.message}`,
           true
         );
+        // Clear file input on error so user must select again
+        if (fileInput) fileInput.value = "";
+        uploadedCvs = [];
+        updateStartRecommendingButton(uploadedCvs);
       } finally {
         hideLoading(uploadStatus);
         analyzeButton.disabled = false;
@@ -979,6 +1012,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       // Clear uploadedCvs so it doesn't process old data
       uploadedCvs = [];
+      // Keep lastProcessedFileNames to prevent reprocessing same files
+      // They will be cleared when new files are selected
       updateStartRecommendingButton(uploadedCvs);
 
       // INTEGRATED: Close modal
