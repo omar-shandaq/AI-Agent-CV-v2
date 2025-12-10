@@ -68,10 +68,9 @@
             <i class="fas fa-cloud-upload-alt fa-2x"></i>
             <p class="muted">اسحب وأفلت الملفات هنا أو انقر للتصفح</p>
             <input id="file-input" type="file" multiple accept=".pdf,.docx,.txt" />
+            <!-- Status overlay inside upload area -->
             <div id="upload-status"></div>
           </div>
-          
-          <div id="submitted-cv-bubbles" class="submitted-cv-bubbles" aria-live="polite"></div>
           
           <!-- Divider -->
           <div class="section-divider"></div>
@@ -84,6 +83,8 @@
           
           <!-- Rules Container -->
           <div id="rules-container" class="rules-container">
+            <!-- Rules inputs will be dynamically added here -->
+            <!-- Status overlay inside rules container -->
             <div id="rules-status"></div>
           </div>
           
@@ -96,6 +97,12 @@
           <button id="generate-recommendations-btn" class="primary action-full" disabled>
             <i class="fas fa-star"></i> إصدار التوصيات
           </button>
+        </section>
+
+        <!-- Uploaded CVs Section -->
+        <section class="panel-section card uploaded-cvs-section">
+          <h3><i class="fas fa-folder-open"></i> السير الذاتية المرفوعة</h3>
+          <div id="submitted-cv-bubbles" class="submitted-cv-bubbles" aria-live="polite"></div>
         </section>
       </aside>
     </div>
